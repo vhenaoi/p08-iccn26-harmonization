@@ -91,7 +91,20 @@ if __name__ == '__main__':
     plot_single(resid, "Site comparison -- Residualization (age+sex+site)", "boxplot_site_residualization.png")
 
     # the headline before/after comparisons
-    plot_before_after(raw, siteonly, "Raw", "Site-only harmonized",
+    # NOTE (2026-09-02, same root cause already documented in
+    # plot_spectra_by_site.py on 2026-08-14): Site-only harmonization is OLS
+    # residualization -- every feature is mean-zero by construction. Plotting
+    # that bare residual under the label "Global_IAF" makes an 8-13 Hz
+    # frequency read as -2..+3, which has no physiological meaning. Fix: add
+    # back each feature's RAW grand mean before plotting -- the same
+    # "adjusted = residual + grand mean" convention already used for the
+    # spectrum reconstruction. Site-R^2 and the Kruskal-Wallis H (both
+    # shift-invariant) are unaffected, so significance stars don't change --
+    # only the y-axis scale becomes physically interpretable again.
+    siteonly_display = siteonly.copy()
+    siteonly_display[KEY_FEATURES] = siteonly_display[KEY_FEATURES] + raw[KEY_FEATURES].mean()
+
+    plot_before_after(raw, siteonly_display, "Raw", "Site-only harmonized",
                        "boxplot_before_after_siteonly.png")
     plot_before_after(raw, combat, "Raw", "ComBat",
                        "boxplot_before_after_combat.png")
