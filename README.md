@@ -15,6 +15,13 @@ reproducibility, not as a one-command pipeline — running them end to end
 requires the raw datasets below, and the file paths are hardcoded to the
 author's local setup.
 
+**Verified 2026-09-01:** `extract_features_public.py` and
+`harmonize_compare.py` were tested by cloning this exact repo fresh and
+running them on real CHBMP/SRM/LEMON data (`--pilot` mode, 5 subjects/site).
+Install with `pip install -r requirements.txt` — the versions are pinned
+because `specparam` is pre-1.0 release-candidate software whose API has
+changed between RCs.
+
 ## Datasets used
 
 Three real, open-access, healthy-control resting-state EEG datasets — no
@@ -24,7 +31,7 @@ patient data, nothing private:
 |-------|---------------------------------------------|--------|
 | CHBMP | Cuban Human Brain Mapping Project           | [chbmp-open.loris.ca](https://chbmp-open.loris.ca/) — [Hernández-González et al., 2021, *Scientific Data*](https://doi.org/10.1038/s41597-021-00829-7) |
 | SRM   | SRM resting-state EEG                        | [openneuro.org/datasets/ds003775](https://openneuro.org/datasets/ds003775) |
-| LEMON | Leipzig Mind-Body-Emotion (MPI-Leipzig)      | [openneuro.org/datasets/ds000221](https://openneuro.org/datasets/ds000221) — [Babayan et al., 2019, *Scientific Data*](https://doi.org/10.1038/sdata.2018.308) |
+| LEMON | Leipzig Mind-Body-Emotion (MPI-Leipzig)      | [openneuro.org/datasets/ds000221](https://openneuro.org/datasets/ds000221) (BIDS version used here) / [study info](https://fcon_1000.projects.nitrc.org/indi/retro/MPI_LEMON.html) — [Babayan et al., 2019, *Scientific Data*](https://doi.org/10.1038/sdata.2018.308) |
 
 30 subjects per site: LEMON's 30 usable subjects (after preprocessing) is
 the real ceiling — CHBMP (248 available) and SRM (111 available) were
