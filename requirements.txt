@@ -1,0 +1,15 @@
+# Pinned to versions actually verified against this code (2026-09-01) by
+# cloning this repo fresh and running extract_features_public.py --pilot on
+# real data end to end. specparam in particular is pre-1.0 release-candidate
+# software whose API has changed between RCs -- pin it exactly, don't just
+# `pip install specparam`.
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.14.1
+mne==1.8.0
+specparam==2.0.0rc7
+matplotlib==3.9.2
+scikit-learn==1.9.0
+shap==0.45.1
+sage-importance==0.0.6
+neuroHarmonize==2.4.5

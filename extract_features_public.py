@@ -104,9 +104,15 @@ def run_specparam(freqs, psd_linear):
     """
     NOTE on specparam API: the original Sapienza script (build_individual_bands_db_
     v3b_avgref.py) was written against a specparam release exposing a nested
-    `fm.results.model...` object. The environment here has specparam 2.0.0rc3,
-    whose SpectralModel exposes flat attributes instead (`aperiodic_params_`,
-    `peak_params_`, `r_squared_`, `error_`, `power_spectrum` already in log10).
+    `fm.results.model...` object, then adapted for specparam 2.0.0rc3's flat
+    attributes (`aperiodic_params_`, `peak_params_`, `r_squared_`, `error_`,
+    `power_spectrum`). specparam 2.0.0rc7 (the version `pip install specparam`
+    gets as of this writing -- verified 2026-09-01 by actually cloning this
+    repo and running it fresh) moved everything back under nested objects:
+    `fm.results.has_model`, `fm.results.get_params('aperiodic', 'offset'|
+    'exponent'|'peak')`, `fm.results.metrics.results['gof_rsquared'|
+    'error_mae']`, `fm.data.power_spectrum`. requirements.txt pins
+    specparam==2.0.0rc7 so this exact API is what a fresh clone gets.
     The maths are identical -- 'fixed' aperiodic mode is offset - exponent*log10(f)
     -- so flat_raw (aperiodic-removed spectrum) is reconstructed manually instead
     of relying on a private nested attribute. Verified against a synthetic
@@ -124,16 +130,18 @@ def run_specparam(freqs, psd_linear):
 
     try:
         fm.fit(f_fit, p_fit)
-        if not fm.has_model:
+        if not fm.results.has_model:
             raise RuntimeError("no model")
-        offset, exponent = float(fm.aperiodic_params_[0]), float(fm.aperiodic_params_[1])
-        r2    = float(fm.r_squared_)
-        error = float(fm.error_)
+        offset  = float(fm.results.get_params('aperiodic', 'offset'))
+        exponent = float(fm.results.get_params('aperiodic', 'exponent'))
+        metrics = fm.results.metrics.results
+        r2    = float(metrics['gof_rsquared'])
+        error = float(metrics['error_mae'])
 
         ap_fit   = offset - exponent * np.log10(f_fit)
-        flat_raw = np.asarray(fm.power_spectrum, dtype=float) - ap_fit
+        flat_raw = np.asarray(fm.data.power_spectrum, dtype=float) - ap_fit
 
-        pp = fm.peak_params_
+        pp = fm.results.get_params('peak')
         if pp is not None and np.size(pp) > 0:
             peak_params = np.atleast_2d(pp)
     except Exception as e:
