@@ -1,24 +1,13 @@
 """
-make_demographics_table.py
-────────────────────────────────────────────────────────────────────────────────
-Table 1 (demographics), the standard first table of any clinical EEG paper --
-built directly from DB_WIDE_DEMO_3SITES.xlsx (age, sex; education where the
-site actually reports it).
-
-Honesty note: education is only reported for CHBMP (categorical school level,
-e.g. "High School"). SRM's public participants.tsv does not include it, and
-LEMON's encoding is a different, non-comparable school-system scale that this
-project does not currently extract. Rather than inventing a cross-site
-years-of-education number, education is shown as CHBMP-only, explicitly
-labeled -- the same "don't manufacture missing precision" standard used
-throughout this project.
+make_demographics_table_v2.py -- v2/N=111-per-site counterpart of
+build/make_demographics_table.py. Identical logic, data_v2/ paths.
 """
 from pathlib import Path
 import pandas as pd
 import numpy as np
 from scipy import stats
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data_v2"
 IN_XLSX  = DATA_DIR / "DB_WIDE_DEMO_3SITES.xlsx"
 
 
@@ -47,8 +36,6 @@ def build_table1(df):
 
 
 def group_tests(df):
-    """Real between-site tests -- do NOT skip these: a demographics table
-    without them just shows numbers look different, not whether they are."""
     groups = [df.loc[df.Site == s, 'age'].dropna().values for s in ['CHBMP', 'SRM', 'LEMON']]
     H, p_age = stats.kruskal(*groups)
 

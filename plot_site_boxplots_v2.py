@@ -1,17 +1,7 @@
 """
-plot_site_boxplots.py
-────────────────────────────────────────────────────────────────────────────────
-Site comparison, raincloud style (half-violin + individual points), validated
-palette, larger type. Two products:
-
-  1. Per-feature BEFORE vs AFTER harmonization -- two rows (Raw on top,
-     Site-only harmonized on bottom) for the same 6 key features, so the
-     "did it actually get better" question is answered by literally looking
-     up and down the same column.
-  2. A single-condition panel (kept for slides that only need one version).
-
-Kruskal-Wallis H + significance stars per panel, same statistic Babiloni's
-own group reports.
+plot_site_boxplots_v2.py -- v2/N=111 counterpart of build/plot_site_boxplots.py.
+Identical logic (including the grand-mean-restore fix for site-only), only
+paths point at data_v2/ and slides/precomputed_v2/.
 """
 from pathlib import Path
 import numpy as np
@@ -23,8 +13,8 @@ from scipy import stats
 
 from viz_style import SITE_COLORS, raincloud_group, stars, GRID
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data_v2"
+FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed_v2"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 KEY_FEATURES = ['Global_Exp', 'Global_Off', 'Global_IAF', 'Global_Alpha2_pow',
@@ -85,22 +75,13 @@ if __name__ == '__main__':
     resid    = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_RESIDUALIZATION.xlsx")
     siteonly = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_SITEONLY.xlsx")
 
-    # single-condition panels (still used individually on a couple of slides)
     plot_single(raw, "Site comparison -- Raw (before any correction)", "boxplot_site_raw.png")
     plot_single(combat, "Site comparison -- ComBat", "boxplot_site_combat.png")
     plot_single(resid, "Site comparison -- Residualization (age+sex+site)", "boxplot_site_residualization.png")
 
-    # the headline before/after comparisons
-    # NOTE (2026-09-02, same root cause already documented in
-    # plot_spectra_by_site.py on 2026-08-14): Site-only harmonization is OLS
-    # residualization -- every feature is mean-zero by construction. Plotting
-    # that bare residual under the label "Global_IAF" makes an 8-13 Hz
-    # frequency read as -2..+3, which has no physiological meaning. Fix: add
-    # back each feature's RAW grand mean before plotting -- the same
-    # "adjusted = residual + grand mean" convention already used for the
-    # spectrum reconstruction. Site-R^2 and the Kruskal-Wallis H (both
-    # shift-invariant) are unaffected, so significance stars don't change --
-    # only the y-axis scale becomes physically interpretable again.
+    # grand-mean-restore fix (same as build/plot_site_boxplots.py) -- SiteOnly
+    # is OLS residualization, mean-zero by construction; add back the raw
+    # grand mean before plotting so axes stay physically interpretable.
     siteonly_display = siteonly.copy()
     siteonly_display[KEY_FEATURES] = siteonly_display[KEY_FEATURES] + raw[KEY_FEATURES].mean()
 

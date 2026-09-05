@@ -1,24 +1,9 @@
 """
-age_regression_sage.py
-────────────────────────────────────────────────────────────────────────────────
-SAGE (Shapley Additive Global importancE) for the age-regression model --
-the main-manuscript explainability method in the real Vigilance project
-(age_regression_shap.py runs the supplementary-material SHAP version of the
-same analysis). SAGE is a permutation-based global-importance method: it
-asks how much the model's overall accuracy drops when a feature is removed,
-rather than how a feature moves any one prediction -- a different question
-from SHAP, so the two methods are expected to disagree on which features
-rank highest, and both are shown together in the workshop deck/notebook for
-exactly that reason.
+age_regression_sage_v2.py -- v2 counterpart of build/age_regression_sage.py.
 
-Fits on the SITE-ONLY harmonized features -- see age_regression.py: this is
-the condition that actually won the 4-way repeated-CV comparison (R²=0.182,
-beating raw, ComBat, and full residualization, all p<0.0001), so it is the
-correct final model to explain, not a placeholder.
-
-Markedly heavier than SHAP -- permutation estimation over 70 features took
-~3 minutes even for this modest 90-subject table, too slow for a live
-40-minute browser demo, so this is precomputed offline like the SHAP figure.
+Fits on the PSM(sex) + Site-only harmonized features -- the winning condition
+in age_regression_v2.py (R²=0.406). Heavier than SHAP (permutation-based);
+run detached / in background if it takes a while.
 """
 from pathlib import Path
 import numpy as np
@@ -29,8 +14,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data_v2"
+FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed_v2"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 META   = ['Subject', 'Site', 'N_epochs', 'age', 'sex', 'education']
@@ -38,7 +23,7 @@ ALPHAS = np.logspace(-2, 3, 30)
 
 
 def main():
-    df = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_SITEONLY.xlsx")
+    df = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_PSM_SITEONLY.xlsx")
     feat_cols = [c for c in df.columns if c not in META]
     X = df[feat_cols].fillna(df[feat_cols].median()).values
     y = df['age'].values
@@ -63,7 +48,7 @@ def main():
     ax.set_yticklabels(order, fontsize=12.5)
     ax.set_xlabel('SAGE value (reduction in MSE)', fontsize=14)
     ax.axvline(0, color='#52514e', linewidth=0.8)
-    ax.set_title('What drives the age prediction? (SAGE, top 15 features)\nSite-only harmonized model',
+    ax.set_title('What drives the age prediction? (SAGE, top 15 features)\nPSM (sex) + Site-only harmonized model',
                  fontsize=16, fontweight='bold')
     ax.grid(axis='x', alpha=0.3)
     plt.tight_layout()

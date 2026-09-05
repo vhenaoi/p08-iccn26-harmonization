@@ -1,19 +1,7 @@
 """
-plot_spectra_by_site.py
-────────────────────────────────────────────────────────────────────────────────
-Site-level power spectra, same two-panel layout as the real
-Figure1_spectra_v3b_avgref.png (raw PSD + aperiodic fit | aperiodic-corrected
-PSD), mean ± SEM, colored by Site. Validated palette + larger type
-(viz_style). Reads the per-subject spectra cache written by
-extract_features_public.py (data/spectra/{site}_{subject}_spectrum.npz).
-
-Also produces a BEFORE / AFTER aperiodic-trend comparison: the raw spectrum
-curve itself can't be re-harmonized (harmonization operates on the 70 derived
-scalar features, not the continuous PSD), but two of those 70 features ARE
-the aperiodic offset and exponent that define the dashed 1/f line in panel A
--- so redrawing that line with each subject's Site-only-harmonized Off/Exp
-values is a real, honest "after" picture of exactly what got harmonized, not
-a fabricated one.
+plot_spectra_by_site_v2.py -- v2/N=111 counterpart of build/plot_spectra_by_site.py.
+Identical logic (including the grand-mean-restore fix, found 2026-08-14),
+only paths point at data_v2/ and slides/precomputed_v2/.
 """
 from pathlib import Path
 import numpy as np
@@ -24,9 +12,9 @@ import matplotlib.pyplot as plt
 
 from viz_style import SITE_COLORS, GRID
 
-DATA_DIR    = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR    = Path(__file__).resolve().parent.parent / "data_v2"
 SPECTRA_DIR = DATA_DIR / "spectra"
-FIG_DIR     = Path(__file__).resolve().parent.parent / "slides" / "precomputed"
+FIG_DIR     = Path(__file__).resolve().parent.parent / "slides" / "precomputed_v2"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -100,25 +88,6 @@ def plot_raw_aperiodic_panel():
 
 
 def plot_aperiodic_before_after():
-    """Redraws the aperiodic 1/f line using each subject's REAL harmonized
-    Global_Off / Global_Exp (site-only harmonization) instead of raw -- an
-    honest before/after of exactly the two features that define this line.
-
-    IMPORTANT (found 2026-08-14, thanks to a direct question about why the
-    "after" panel looked wrong): `residualize_covariates` output is a
-    residual -- mean ~0 by construction of OLS (verified: raw Global_Off
-    mean 0.331, site-only-harmonized mean 1.2e-17). Plugging a mean-zero
-    residual straight into offset - exponent*log10(f) does not reconstruct
-    a spectrum -- offset and exponent stop being physical log-power/slope
-    values once they're residuals, so the "line" collapses to a flat,
-    meaningless smear near zero. That is a real bug in this reconstruction,
-    not a real property of harmonized data. Fix: add back the RAW grand
-    mean of each feature before reconstructing, so the line represents
-    "this subject's aperiodic component, referenced to the overall cohort
-    average" -- physically interpretable, same convention harmonization
-    papers use when they plot ComBat-adjusted data (adjusted = residual +
-    grand mean, not the bare residual).
-    """
     by_site = load_site_spectra()
     raw_feat = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_RAW.xlsx").set_index('Subject')
     harm_feat = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_SITEONLY.xlsx").set_index('Subject')
@@ -144,8 +113,6 @@ def plot_aperiodic_before_after():
                 if pd.isna(off) or pd.isna(exp):
                     continue
                 if is_harmonized:
-                    # residual -> back to physical units, referenced to the
-                    # cohort grand mean (standard "adjusted data" convention)
                     off = off + grand_mean_off
                     exp = exp + grand_mean_exp
                 lines.append(off - exp * np.log10(freqs_ref))
@@ -165,7 +132,6 @@ def plot_aperiodic_before_after():
         for sp in ('top', 'right'):
             panel_ax.spines[sp].set_visible(False)
 
-    # shared y-limits so the visual convergence is honest, not an axis trick
     ylims = [ax.get_ylim() for ax in axes]
     ymin, ymax = min(y[0] for y in ylims), max(y[1] for y in ylims)
     for ax in axes:
@@ -181,19 +147,11 @@ def plot_aperiodic_before_after():
 
 
 def gaussian_peak(freqs, cf, pw, bw, sigma_scale=2.0):
-    """specparam's own periodic-component parameterization: a Gaussian in
-    log-power space, CF=center freq, PW=peak height, BW=bandwidth
-    (sigma = BW / 2). Verified against the real cached flat_raw curve for a
-    held-out subject: r = 0.993 -- this is a near-exact reconstruction, not
-    an approximation invented for this figure."""
     sigma = bw / sigma_scale
     return pw * np.exp(-((freqs - cf) ** 2) / (2 * sigma ** 2))
 
 
 def reconstruct_periodic(freqs, row):
-    """Sum of the alpha (IAF) and beta (IBF) Gaussian peaks -- the ONLY two
-    peaks specparam fits in this pipeline (see FOOOF_CFG / find_IAF_IBF in
-    extract_features_public.py)."""
     out = np.zeros_like(freqs)
     if pd.notna(row.get('Global_IAF')) and pd.notna(row.get('Global_IAFpow')) and pd.notna(row.get('Global_IAF_BW')):
         out = out + gaussian_peak(freqs, row['Global_IAF'], row['Global_IAFpow'], row['Global_IAF_BW'])
@@ -202,22 +160,18 @@ def reconstruct_periodic(freqs, row):
     return out
 
 
-def plot_full_panel_before_after():
-    """The complete Panel A + Panel B figure, before vs. after harmonization.
-    Both panels' "after" versions are reconstructed entirely from the 70
-    harmonized scalar features (aperiodic Off/Exp + peak CF/PW/BW) -- no
-    continuous curve was ever harmonized directly (harmonization operates on
-    scalars), so this is the honest way to show it: rebuild the same two
-    curves specparam itself would draw, using the harmonized numbers.
-
-    Residualized features are centered at 0 by construction (OLS residuals)
-    -- adding back each feature's RAW grand mean before reconstruction is
-    required to get physically interpretable curves (same convention as
-    plot_aperiodic_before_after()).
-    """
+def plot_full_panel_before_after(harm_table_name="DB_WIDE_DEMO_3SITES_COMBAT.xlsx",
+                                  harm_label="AFTER (ComBat)",
+                                  needs_grand_mean_restore=False,
+                                  out_name="spectra_full_before_after.png"):
+    """needs_grand_mean_restore=True only for zero-mean-by-construction tables
+    (pure OLS residualization, e.g. Site-only) -- ComBat preserves the natural
+    physical scale already (verified: mean Global_Exp/Off close to raw's, not
+    zero), so adding the grand mean back would double-count it and inflate
+    the reconstructed spectrum."""
     by_site = load_site_spectra()
     raw_feat  = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_RAW.xlsx").set_index('Subject')
-    harm_feat = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_SITEONLY.xlsx").set_index('Subject')
+    harm_feat = pd.read_excel(DATA_DIR / harm_table_name).set_index('Subject')
 
     feat_cols_for_grandmean = ['Global_Off', 'Global_Exp', 'Global_IAF', 'Global_IAFpow',
                                 'Global_IAF_BW', 'Global_IBF', 'Global_IBFpow', 'Global_IBF_BW']
@@ -228,7 +182,7 @@ def plot_full_panel_before_after():
     fig, axes = plt.subplots(2, 2, figsize=(14, 11.5))
 
     for row_idx, (feat_table, row_label, is_harmonized) in enumerate(
-        [(raw_feat, 'BEFORE (Raw)', False), (harm_feat, 'AFTER (Site-only harmonized)', True)]
+        [(raw_feat, 'BEFORE (Raw)', False), (harm_feat, harm_label, needs_grand_mean_restore)]
     ):
         ax_a, ax_b = axes[row_idx]
         fig.text(0.01, 0.76 if row_idx == 0 else 0.29, row_label, rotation=90,
@@ -293,7 +247,6 @@ def plot_full_panel_before_after():
             for sp in ('top', 'right'):
                 ax.spines[sp].set_visible(False)
 
-    # shared y-limits within each column so convergence is visually honest
     for col in range(2):
         ylims = [axes[r, col].get_ylim() for r in range(2)]
         ymin, ymax = min(y[0] for y in ylims), max(y[1] for y in ylims)
@@ -303,7 +256,7 @@ def plot_full_panel_before_after():
     fig.suptitle('Full spectrum reconstruction, before vs. after harmonization',
                  fontsize=19, fontweight='bold', y=1.01)
     fig.tight_layout(rect=[0.03, 0, 1, 1], w_pad=3.0, h_pad=4.0)
-    out = FIG_DIR / "spectra_full_before_after.png"
+    out = FIG_DIR / out_name
     fig.savefig(out, dpi=180, bbox_inches='tight', facecolor='white')
     plt.close(fig)
     print(f"Saved: {out}")
@@ -312,4 +265,6 @@ def plot_full_panel_before_after():
 if __name__ == '__main__':
     plot_raw_aperiodic_panel()
     plot_aperiodic_before_after()
-    plot_full_panel_before_after()
+    plot_full_panel_before_after(harm_table_name="DB_WIDE_DEMO_3SITES_SITEONLY.xlsx",
+                                  harm_label="AFTER (Site-only harmonized)",
+                                  needs_grand_mean_restore=True)

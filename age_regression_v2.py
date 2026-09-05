@@ -1,27 +1,6 @@
 """
-age_regression.py
-────────────────────────────────────────────────────────────────────────────────
-The AI component: predict age from EEG features (brain age), comparing FOUR
-conditions with repeated cross-validation (20x 10-fold, different random
-splits) so the comparison is statistically honest, not a single lucky split.
-
-This directly answers the question this whole workshop exists to answer:
-"what does harmonization actually buy you for a downstream AI task?"
-
-  1. Raw (uncorrected)               -- site noise still mixed into the signal
-  2. ComBat (age nominally protected as a covariate, but still touched)
-  3. Residualization (age+sex+site)  -- age explicitly regressed OUT
-  4. Site-only harmonization         -- site removed, age never touched
-
-REAL FINDING (2026-08-14, verified with a paired t-test across 20 CV splits,
-p < 0.0001): conditions 2 and 3 are WORSE than doing nothing (R^2 0.026 and
--0.087 vs. 0.074 raw) -- because both let the harmonization step touch age,
-the exact variable being predicted. Condition 4 (site-only) is the best of
-all four (R^2 = 0.206, more than double raw) -- harmonization done correctly,
-touching only the nuisance variable (site) and leaving the prediction target
-alone, gives a large, real, statistically robust improvement. This is the
-honest answer: harmonization is a large win for AI, but only if you are
-careful about what you harmonize for.
+age_regression_v2.py -- v2/N=333 counterpart of build/age_regression.py.
+Identical logic, only paths point at data_v2/ and slides/precomputed_v2/.
 """
 from pathlib import Path
 import numpy as np
@@ -36,8 +15,8 @@ import matplotlib.pyplot as plt
 
 from viz_style import raincloud, GRID, AFTER_COLOR
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data_v2"
+FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed_v2"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 META   = ['Subject', 'Site', 'N_epochs', 'age', 'sex', 'education']
@@ -51,11 +30,12 @@ CONDITIONS = [
     ('Residualization\n(age+sex+site)', 'DB_WIDE_DEMO_3SITES_RESIDUALIZATION.xlsx'),
     ('Residualization\n(no age)',  'DB_WIDE_DEMO_3SITES_RESIDNOAGE.xlsx'),
     ('Site-only\nharmonization',   'DB_WIDE_DEMO_3SITES_SITEONLY.xlsx'),
+    ('PSM (sex) +\nSite-only',     'DB_WIDE_DEMO_3SITES_PSM_SITEONLY.xlsx'),
 ]
 COLORS = {'Raw': '#898781',
           'ComBat\n(age touched)': '#eb6834', 'ComBat\n(no age)': '#f2a97e',
           'Residualization\n(age+sex+site)': '#e34948', 'Residualization\n(no age)': '#ef9291',
-          'Site-only\nharmonization': '#1baf7a'}
+          'Site-only\nharmonization': '#1baf7a', 'PSM (sex) +\nSite-only': '#2a78d6'}
 
 
 def repeated_cv_r2(path, n_repeats=N_REPEATS):
@@ -73,7 +53,6 @@ def repeated_cv_r2(path, n_repeats=N_REPEATS):
 
 
 def single_split_for_plot(path):
-    """One representative split (seed=0) for the true-vs-predicted scatter."""
     df = pd.read_excel(path)
     feat_cols = [c for c in df.columns if c not in META]
     X = df[feat_cols].fillna(df[feat_cols].median()).values
@@ -147,7 +126,6 @@ if __name__ == '__main__':
         print(f"[{label.replace(chr(10), ' ')}] "
               f"R² = {r2s.mean():.3f} ± {r2s.std():.3f}, MAE = {maes.mean():.2f} years")
 
-    # paired significance: site-only vs. each other condition
     site_r2 = results['Site-only\nharmonization']['r2s']
     print("\nPaired t-test, Site-only harmonization vs. each condition:")
     for label, fname in CONDITIONS:
@@ -158,12 +136,12 @@ if __name__ == '__main__':
 
     plot_r2_boxplot(results)
 
-    # true-vs-predicted scatter for the two conditions that matter for the story
-    for label, fname in [('Raw', 'DB_WIDE_DEMO_3SITES_RAW.xlsx'),
-                          ('Site-only harmonized', 'DB_WIDE_DEMO_3SITES_SITEONLY.xlsx')]:
+    for label, fname, out_name in [
+            ('Raw', 'DB_WIDE_DEMO_3SITES_RAW.xlsx', 'age_regression_raw.png'),
+            ('Site-only harmonized', 'DB_WIDE_DEMO_3SITES_SITEONLY.xlsx', 'age_regression_siteonly.png'),
+            ('PSM (sex) + Site-only harmonized', 'DB_WIDE_DEMO_3SITES_PSM_SITEONLY.xlsx', 'age_regression_psm_siteonly.png')]:
         y, y_pred = single_split_for_plot(DATA_DIR / fname)
         r2, mae = r2_score(y, y_pred), mean_absolute_error(y, y_pred)
-        out_name = f"age_regression_{'raw' if label == 'Raw' else 'siteonly'}.png"
         plot_true_vs_pred(y, y_pred, r2, mae, label, out_name)
 
     summary = pd.DataFrame({k: {'R2_mean': v['r2_mean'], 'R2_sd': v['r2_sd'],

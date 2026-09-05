@@ -1,23 +1,39 @@
 """
-extract_features_public.py
+extract_features_public_v2.py
 ────────────────────────────────────────────────────────────────────────────────
-P08 ICCN 2026 workshop demo data. Re-implements Veronica's real Sapienza feature
-extraction (same REGIONS / FOOOF_CFG / EPOCH_LEN / FEAT_ORDER / helper functions
-as build_individual_bands_db_v3b_avgref.py, ADCD_LBCD project) but points at
-PUBLIC, open EEG instead of the private PDWAVES clinical consortium data:
+"v2" / "version 111" of extract_features_public.py -- same exact feature-
+extraction method (REGIONS / FOOOF_CFG / EPOCH_LEN / FEAT_ORDER / helper
+functions, byte-identical to build/extract_features_public.py), but N=111
+per site instead of N=30, with:
 
-  - CHBMP (Cuban Human Brain Mapping Project)
-  - SRM
-  - LEMON (Leipzig Mind-Body-Emotion, Max Planck Institute)
+  - CHBMP: 111 subjects, age-stratified sample of the 248 available (see
+    select_chbmp_111.py / selected_chbmp_111.txt) -- same 2022 sovaharmony
+    pipeline as before, unchanged.
+  - SRM: all 111 available subjects (that IS the site's real ceiling --
+    no selection needed).
+  - LEMON: 111 subjects, age-stratified sample of the 213 available,
+    reprocessed from scratch on tvb-gpu-01 (2026 sovaharmony pipeline,
+    2026-09-03/04) -- see derivatives_v2_111/.
 
-All three already preprocessed/ICA-cleaned via sovaharmony (GRUNECO/UdeA
-harmonization pipeline) -- we read their "desc-wica_eeg.fif" continuous output,
-epoch it ourselves (2 s, matching EPOCH_LEN), then run the identical
-FOOOF/specparam feature logic. No raw PDWAVES data is used anywhere here.
+KNOWN LIMITATION (documented per Veronica's decision 2026-09-04): CHBMP and
+SRM were preprocessed in 2022; LEMON's 111 were preprocessed in 2026 with a
+newer sovaharmony version pulled fresh from GRUNECO's public GitHub repos
+(the original 2022 gitfront-hosted install is no longer reachable). This
+means "site" and "sovaharmony pipeline version" are perfectly confounded for
+LEMON vs. the other two sites in this v2 dataset. Validated directly before
+accepting this (sub-032301, reprocessed with both pipeline versions):
+signal correlation r=0.975 (51/54 channels r>0.95), and the two features
+that matter most for this workshop (Global_IAF, Global_IBF) agree within
+0.1% between versions. The drift is real but small relative to genuine
+site effects the workshop already detects -- documented here rather than
+hidden, not eliminated.
+
+This script writes to data_v2/ (sibling of data/), never touching the N=30
+production dataset used for the live Sept 8 workshop.
 
 Usage:
-    python extract_features_public.py --pilot        # 5 subjects/site, quick check
-    python extract_features_public.py                # full run (N_PER_SITE each)
+    python extract_features_public_v2.py --pilot   # 5 subjects/site, quick check
+    python extract_features_public_v2.py            # full run (111/site)
 """
 
 import argparse
@@ -39,19 +55,21 @@ from specparam import SpectralModel
 SOURCE_ROOT = Path(r"E:\Academico\Universidad\Posgrado\Tesis\Datos\BASESDEDATOS")
 CHBMP_DIR   = SOURCE_ROOT / "CHBMP" / "derivatives" / "sovaharmony"
 SRM_DIR     = SOURCE_ROOT / "SRM" / "derivatives" / "sovaharmony"
-LEMON_DIR   = SOURCE_ROOT / "LEMON_BIDS" / "derivatives" / "sovaharmony"
+LEMON_DIR   = SOURCE_ROOT / "LEMON_BIDS" / "derivatives_v2_111"          # NEW pipeline, 111 subjects
 CHBMP_DEMO  = Path(r"E:\Academico\Universidad\Posgrado\Tesis\Datos\OTRASBASESDEDATOS\CHBMP\Demographic_data.csv")
 SRM_PARTIC  = SOURCE_ROOT / "SRM" / "participants.tsv"
 LEMON_DEMO  = Path(r"E:\Academico\Universidad\Posgrado\Tesis\Datos\OTRASBASESDEDATOS\LEMON\Behavioural_Data_MPILMBB_LEMON"
                     r"\META_File_IDs_Age_Gender_Education_Drug_Smoke_SKID_LEMON.csv")
 
+CHBMP_SELECTED_LIST = Path(__file__).resolve().parent / "selected_chbmp_111.txt"
+
 SITES = ('CHBMP', 'SRM', 'LEMON')
 
-OUT_DIR     = Path(__file__).resolve().parent.parent / "data"
-SPECTRA_DIR = OUT_DIR / "spectra"  # per-subject Global spectra cache, for the raw+aperiodic figure
-N_PER_SITE  = 30  # full-run target; --pilot overrides to 5
+OUT_DIR     = Path(__file__).resolve().parent.parent / "data_v2"   # sibling of data/, never touches v1
+SPECTRA_DIR = OUT_DIR / "spectra"
+N_PER_SITE  = 111  # full-run target; --pilot overrides to 5
 
-# ── Region definitions (IDENTICAL to build_individual_bands_db_v3b_avgref.py) ──
+# ── Region definitions (IDENTICAL to build/extract_features_public.py) ─────────
 REGIONS = {
     'Global': ['Fp1','Fp2','F7','F3','Fz','F4','F8',
                'T7','C3','Cz','C4','T8',
@@ -85,8 +103,7 @@ FEAT_ORDER = [
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HELPER FUNCTIONS -- copied verbatim from build_individual_bands_db_v3b_avgref.py
-# (ADCD_LBCD, Vigilance project) so the feature *method* stays exactly Sapienza's.
+# HELPER FUNCTIONS -- byte-identical to build/extract_features_public.py
 # ─────────────────────────────────────────────────────────────────────────────
 
 def compute_region_psd(epochs_data, ch_names, region_chs, sfreq, nperseg):
@@ -101,24 +118,6 @@ def compute_region_psd(epochs_data, ch_names, region_chs, sfreq, nperseg):
 
 
 def run_specparam(freqs, psd_linear):
-    """
-    NOTE on specparam API: the original Sapienza script (build_individual_bands_db_
-    v3b_avgref.py) was written against a specparam release exposing a nested
-    `fm.results.model...` object, then adapted for specparam 2.0.0rc3's flat
-    attributes (`aperiodic_params_`, `peak_params_`, `r_squared_`, `error_`,
-    `power_spectrum`). specparam 2.0.0rc7 (the version `pip install specparam`
-    gets as of this writing -- verified 2026-09-01 by actually cloning this
-    repo and running it fresh) moved everything back under nested objects:
-    `fm.results.has_model`, `fm.results.get_params('aperiodic', 'offset'|
-    'exponent'|'peak')`, `fm.results.metrics.results['gof_rsquared'|
-    'error_mae']`, `fm.data.power_spectrum`. requirements.txt pins
-    specparam==2.0.0rc7 so this exact API is what a fresh clone gets.
-    The maths are identical -- 'fixed' aperiodic mode is offset - exponent*log10(f)
-    -- so flat_raw (aperiodic-removed spectrum) is reconstructed manually instead
-    of relying on a private nested attribute. Verified against a synthetic
-    spectrum before use (manual reconstruction matches within the peak-fit
-    residual, as expected).
-    """
     mask  = (freqs >= FOOOF_FREQ_RANGE[0]) & (freqs <= FOOOF_FREQ_RANGE[1])
     f_fit = freqs[mask]
     p_fit = np.clip(psd_linear[mask], 1e-30, None)
@@ -217,18 +216,22 @@ def flat_band_power(freqs_fit, flat_raw, flo, fhi):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# NEW (not in the original script): find + epoch the public sovaharmony files.
-# The original script reads already-epoched EEGLAB .set files (epoching was done
-# upstream in MATLAB for PDWAVES). Public data here is continuous, ICA-cleaned
-# .fif -- we epoch it ourselves, same EPOCH_LEN, dropping the first/last 2 s to
-# avoid filter edge artifacts.
+# Subject selection -- the only real logic difference from v1
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _load_chbmp_selected_ids():
+    with open(CHBMP_SELECTED_LIST, encoding="utf-8") as f:
+        return set(l.strip() for l in f if l.strip())
+
 
 def list_site_subjects(site):
     if site == 'CHBMP':
+        selected = _load_chbmp_selected_ids()
         files = sorted(CHBMP_DIR.glob("sub-*/eeg/*_desc-wica_eeg.fif"))
+        files = [f for f in files if f.parents[1].name in selected]
     elif site == 'SRM':
         # prefer ses-t1 only (baseline), avoid double-counting longitudinal subjects
+        # -- all 111 available subjects go in, this IS the site's real ceiling.
         files = sorted(SRM_DIR.glob("sub-*/ses-t1/eeg/*_desc-wica_eeg.fif"))
     elif site == 'LEMON':
         files = sorted(LEMON_DIR.glob("sub-*/eeg/*_desc-wica_eeg.fif"))
@@ -248,24 +251,12 @@ def subject_id_from_path(fpath, site):
 
 
 def load_epochs_from_fif(fpath, epoch_len=EPOCH_LEN):
-    """
-    Loads a sovaharmony wICA-cleaned continuous .fif and epochs it.
-
-    Amplitude-scale fix: CHBMP and SRM's sovaharmony outputs disagree on what
-    unit their data is actually stored in, despite both FIFF headers claiming
-    Volts. Verified directly (2026-08-13 pilot run): CHBMP std ~= 7e-6 (true
-    Volts -> needs x1e6 to get uV, a normal ~7 uV EEG amplitude). SRM std ~= 7
-    (already uV-scale, mislabeled as Volts in the header -- multiplying by 1e6
-    again would inflate power by 1e12 and fabricate a fake "site effect" of
-    ~12 in the aperiodic offset, which is not real physiology). Auto-detect
-    per file instead of trusting the header.
-    """
+    """Amplitude-scale fix identical to v1 -- see build/extract_features_public.py
+    for the full rationale (CHBMP/SRM sovaharmony outputs disagree on units
+    despite both FIFF headers claiming Volts; auto-detected per file)."""
     raw = mne.io.read_raw_fif(str(fpath), preload=True, verbose=False)
     raw.pick_types(eeg=True)
 
-    # If native std >= 1e-2, the data is already uV-scale despite the Volts
-    # header -- rescale back down so it matches MNE's true-Volts convention,
-    # which the rest of the pipeline (average ref, "* 1e6" in main()) assumes.
     native_std = np.std(raw.get_data())
     if native_std >= 1e-2:
         raw.apply_function(lambda x: x / 1e6, channel_wise=False)
@@ -296,12 +287,7 @@ def load_srm_demo():
 
 
 def load_lemon_demo():
-    """
-    LEMON reports age as a 5-year privacy bin (e.g. '20-25'), not an exact
-    value -- this is the dataset's own real anonymization scheme, not
-    something we introduced. We use the bin midpoint as a numeric proxy for
-    the age covariate (documented limitation, fine for a teaching demo).
-    """
+    """LEMON reports age as a 5-year privacy bin -- same handling as v1."""
     df = pd.read_csv(LEMON_DEMO)
     df = df.rename(columns={df.columns[0]: 'Subject',
                              'Gender_ 1=female_2=male': 'sex_code',
@@ -321,13 +307,13 @@ def load_lemon_demo():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MAIN
+# MAIN -- identical logic to v1, different N_PER_SITE / OUT_DIR / subject lists
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main(n_per_site, out_name):
     mne.set_log_level('ERROR')
     print("=" * 60)
-    print("  extract_features_public.py")
+    print("  extract_features_public_v2.py")
     print(f"  specparam : {_specparam_mod.__version__}")
     print(f"  mne       : {mne.__version__}")
     print(f"  scipy     : {scipy.__version__}")
@@ -396,10 +382,6 @@ def main(n_per_site, out_name):
                             freqs_fit, flat_raw, flo, fhi
                         )
 
-                # ── cache the Global spectrum for the raw+aperiodic figure ──────
-                # (same triplet the real Vigilance pipeline saves: raw log10 PSD,
-                # the aperiodic fit reconstructed from offset/exponent, and the
-                # aperiodic-corrected "flat" spectrum)
                 if reg_name == 'Global' and np.isfinite(sp['exponent']):
                     SPECTRA_DIR.mkdir(parents=True, exist_ok=True)
                     ap_fit = sp['offset'] - sp['exponent'] * np.log10(freqs_fit)
@@ -417,12 +399,11 @@ def main(n_per_site, out_name):
     region_cols = [f'{r}_{f}' for r in REGIONS for f in FEAT_ORDER]
     df = df[meta_cols + [c for c in region_cols if c in df.columns]]
 
-    # merge demographics
     demo_chbmp = load_chbmp_demo()
     demo_srm   = load_srm_demo()
     demo_lemon = load_lemon_demo()
     demo = pd.concat([demo_chbmp, demo_srm, demo_lemon], ignore_index=True)
-    demo['sex'] = demo['sex'].astype(str).str.upper().str[0]  # M/F
+    demo['sex'] = demo['sex'].astype(str).str.upper().str[0]
     df = df.merge(demo, on='Subject', how='left')
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

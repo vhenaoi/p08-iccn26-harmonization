@@ -1,18 +1,11 @@
 """
-age_regression_shap.py
-────────────────────────────────────────────────────────────────────────────────
-Explainable AI for the age-regression model, adapted from the real Vigilance
-project's explainability code (generate_combined_shap.py / SHAP_comb.py use
-SHAP in supplementary material; SAGE is the main-manuscript method in
-Figure2_SAGE_v3_avgref.png but is markedly heavier to compute -- multi-MB logs,
-minutes per run in the real pipeline -- so this 40-minute precomputed demo
-uses SHAP, the same tool the real project already uses as its supplementary
-explainability method, not an invented substitute.
+age_regression_shap_v2.py -- v2 counterpart of build/age_regression_shap.py.
 
-Fits on the SITE-ONLY harmonized features -- see age_regression.py: this is
-the condition that actually won the 4-way repeated-CV comparison (R²=0.182,
-beating raw, ComBat, and full residualization, all p<0.0001), so it is the
-correct final model to explain, not a placeholder.
+Fits on the PSM(sex) + Site-only harmonized features -- this is the condition
+that won the 7-way repeated-CV comparison in age_regression_v2.py (R²=0.406,
+beating plain Site-only [R²=0.380, p<0.0001] and Raw [R²=0.378]), so it is
+the correct v2 final model to explain, not plain Site-only (that was v1's
+winner).
 """
 from pathlib import Path
 import numpy as np
@@ -23,8 +16,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data_v2"
+FIG_DIR  = Path(__file__).resolve().parent.parent / "slides" / "precomputed_v2"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 META   = ['Subject', 'Site', 'N_epochs', 'age', 'sex', 'education']
@@ -32,7 +25,7 @@ ALPHAS = np.logspace(-2, 3, 30)
 
 
 def main():
-    df = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_SITEONLY.xlsx")
+    df = pd.read_excel(DATA_DIR / "DB_WIDE_DEMO_3SITES_PSM_SITEONLY.xlsx")
     feat_cols = [c for c in df.columns if c not in META]
     X = df[feat_cols].fillna(df[feat_cols].median())
     y = df['age'].values
@@ -50,7 +43,7 @@ def main():
     ax = plt.gca()
     ax.set_xlabel(ax.get_xlabel(), fontsize=14)
     ax.tick_params(labelsize=12.5)
-    plt.title('What drives the age prediction? (SHAP, top 15 features)\nSite-only harmonized model',
+    plt.title('What drives the age prediction? (SHAP, top 15 features)\nPSM (sex) + Site-only harmonized model',
                fontsize=16, fontweight='bold')
     plt.tight_layout()
     out = FIG_DIR / "age_regression_shap_beeswarm.png"
