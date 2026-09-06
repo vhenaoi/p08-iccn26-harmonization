@@ -36,6 +36,14 @@ knowing before reusing this code:
   Fixing this required also matching on sex (`psm_siteonly_v2.py`) before
   harmonizing, which recovers a real, significant improvement (R² = 0.406,
   p<0.0001).
+- **Matching helps, but not uniformly across techniques.** Pairing the same
+  sex-matched subset with ComBat instead of site-only residualization
+  (`psm_combatnoage_v2.py`) does **not** produce a comparable gain: R² =
+  0.372 without matching vs. 0.373 with it — no real difference. Whether
+  matching-first helps depends on which harmonization technique it's paired
+  with, likely because matching shrinks N (333→226) before ComBat's
+  per-site empirical-Bayes estimation runs, while plain OLS residualization
+  has no equivalent sample-size sensitivity.
 - **A new, more direct verification** (`site_classification_v2.py`,
   `site_classification_exact_replica_v2.py`): instead of only checking
   whether a per-feature statistical test says "not significant" after
@@ -110,14 +118,20 @@ Reliability with a Pre-Processing Pipeline based on ICA and Wavelet-ICA.
    confound found significant in Step 1), then applies site-only
    harmonization on the matched subset — the condition that actually wins
    Step 6 below.
+6b. **`psm_combatnoage_v2.py`** — pairs that same matched subset with
+   ComBat (no age) instead of site-only harmonization, to test whether
+   matching-first is a technique-agnostic fix. It isn't (see "What's new
+   in v2" above).
 7. **`site_classification_v2.py`** / **`site_classification_exact_replica_v2.py`**
    / **`site_classification_slides_simple_v2.py`** — the direct
    verification: can a classifier still guess the recording site after
    harmonization? Tests all conditions, plus an age+sex-only control to
    rule out a purely demographic explanation for the site effect.
 8. **`age_regression_v2.py`** — the AI: predicts age from EEG features,
-   comparing raw / ComBat / residualization / site-only / matched+site-only
-   harmonization, with 20× repeated 10-fold cross-validation.
+   comparing raw / residualization (with and without age) / ComBat (no
+   age) / matched+ComBat (no age) / site-only / matched+site-only
+   harmonization (7 conditions), with 20× repeated 10-fold
+   cross-validation.
 9. **`age_regression_shap_v2.py`** / **`age_regression_sage_v2.py`** —
    explainability on the winning matched + site-only harmonized model
    (SHAP: supplementary-material method; SAGE: main-manuscript method).

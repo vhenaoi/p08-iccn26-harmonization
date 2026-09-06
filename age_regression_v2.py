@@ -25,16 +25,16 @@ N_REPEATS = 20
 
 CONDITIONS = [
     ('Raw',                        'DB_WIDE_DEMO_3SITES_RAW.xlsx'),
-    ('ComBat\n(age touched)',      'DB_WIDE_DEMO_3SITES_COMBAT.xlsx'),
-    ('ComBat\n(no age)',           'DB_WIDE_DEMO_3SITES_COMBATNOAGE.xlsx'),
     ('Residualization\n(age+sex+site)', 'DB_WIDE_DEMO_3SITES_RESIDUALIZATION.xlsx'),
     ('Residualization\n(no age)',  'DB_WIDE_DEMO_3SITES_RESIDNOAGE.xlsx'),
+    ('ComBat\n(no age)',           'DB_WIDE_DEMO_3SITES_COMBATNOAGE.xlsx'),
+    ('PSM (sex) +\nComBat (no age)', 'DB_WIDE_DEMO_3SITES_PSM_COMBATNOAGE.xlsx'),
     ('Site-only\nharmonization',   'DB_WIDE_DEMO_3SITES_SITEONLY.xlsx'),
     ('PSM (sex) +\nSite-only',     'DB_WIDE_DEMO_3SITES_PSM_SITEONLY.xlsx'),
 ]
 COLORS = {'Raw': '#898781',
-          'ComBat\n(age touched)': '#eb6834', 'ComBat\n(no age)': '#f2a97e',
           'Residualization\n(age+sex+site)': '#e34948', 'Residualization\n(no age)': '#ef9291',
+          'ComBat\n(no age)': '#f2a97e', 'PSM (sex) +\nComBat (no age)': '#f0c26e',
           'Site-only\nharmonization': '#1baf7a', 'PSM (sex) +\nSite-only': '#2a78d6'}
 
 
@@ -63,17 +63,32 @@ def single_split_for_plot(path):
 
 
 def plot_r2_boxplot(results, out_name="age_regression_r2_boxplot.png"):
+    """Bar + SD error bar, matching the style of the Step 4b site-classification
+    charts (site_classification_slides_simple_v2.py) -- switched from the
+    original raincloud style for visual consistency across the deck, per
+    Veronica's review (2026-09-05): there was no statistical reason specific
+    to this comparison to keep raincloud, it was simply inherited from v1's
+    Babiloni-preferred style and never revisited when 11/12 were redesigned."""
     fig, ax = plt.subplots(figsize=(15, 6.5))
     labels = [c[0] for c in CONDITIONS]
-    data = [results[label]['r2s'] for label in labels]
+    means = [results[label]['r2s'].mean() for label in labels]
+    sds = [results[label]['r2s'].std() for label in labels]
+    colors = [COLORS[label] for label in labels]
 
-    for i, (label, vals) in enumerate(zip(labels, data), start=1):
-        raincloud(ax, vals, i, COLORS[label], jitter_width=0.14, point_size=28)
+    x = range(1, len(labels) + 1)
+    ax.bar(x, means, yerr=sds, color=colors, capsize=6, width=0.6,
+           edgecolor='white', linewidth=1.2, error_kw={'linewidth': 1.8, 'ecolor': '#333'})
+    for i, m in enumerate(means, start=1):
+        va = 'bottom' if m >= 0 else 'top'
+        offset = sds[i - 1] + 0.012
+        ax.text(i, m + offset if m >= 0 else m - offset, f"{m:.3f}",
+                ha='center', va=va, fontsize=12, fontweight='bold')
 
     ax.axhline(0, color='gray', linestyle=':', linewidth=1.3)
-    ax.set_xticks(range(1, len(labels) + 1))
+    ax.set_xticks(list(x))
     ax.set_xticklabels(labels, fontsize=12.5)
     ax.set_xlim(0.4, len(labels) + 0.6)
+    ax.set_ylim(-0.2, 0.5)
     ax.set_ylabel('R² (age prediction), 20x repeated 10-fold CV', fontsize=14)
     ax.set_title('What does harmonization actually buy you for AI?',
                  fontsize=18, fontweight='bold')
