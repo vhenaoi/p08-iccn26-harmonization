@@ -44,12 +44,29 @@ worth knowing before reusing this code:
   the best choice *among methods that actually change the EEG features* (it
   clearly beats ComBat and full residualization), but matching — not
   harmonization — produced most of the improvement over the raw N=333
-  baseline. A further check (`matching_contribution_v2.py`) confirms
-  matching is not interchangeable with statistically adjusting for sex by
-  regression instead: site+sex regression-adjustment on all 333 subjects
-  scores R²=0.352, actually *worse* than doing nothing, while physically
-  matching first and then harmonizing reaches 0.406 (p<0.0001 vs. both
-  alternatives). We are leaving the original R²=0.406-vs-0.380/0.378
+  baseline, **for this specific age-prediction metric.** A further check
+  (`matching_contribution_v2.py`) confirms matching is not interchangeable
+  with statistically adjusting for sex by regression instead:
+  site+sex regression-adjustment on all 333 subjects scores R²=0.352,
+  actually *worse* than doing nothing, while physically matching first and
+  then harmonizing reaches 0.406 (p<0.0001 vs. both alternatives).
+  **Matching does not replace harmonization**, though: matching only
+  decides which subjects are included, it never touches a single EEG
+  feature value, so the matched-but-unharmonized data behind that R²=0.419
+  is still exactly as site-guessable as the raw data (~78%, see
+  `site_classification_v2.py` below) — only harmonization actually erases
+  that detectable, real site signal. A model trained on data that still
+  encodes which site it came from carries a real generalization risk to a
+  genuinely new, unseen site, even if its cross-validated R² here is
+  slightly higher. We tested a direct hypothesis for *why* Raw edges out
+  Site-only on the full 70-feature set — that Raw might be exploiting
+  leftover site signal in the most site-contaminated features — and it did
+  **not** hold up: restricted to only the 15 most site-contaminated
+  features, Site-only actually predicts age *better* than Raw (0.325 vs.
+  0.296); the same holds on the 15 most site-robust features (0.009 vs.
+  0.001). Raw's edge only appears when using all 70 features together,
+  most likely a Ridge/multicollinearity interaction effect, not an
+  isolable site leak. We are leaving the original R²=0.406-vs-0.380/0.378
   comparison in the bullet below for the historical record, but the
   same-sample comparison above is the one to trust.
 - **Matching helps, but not uniformly across techniques.** Pairing the same
