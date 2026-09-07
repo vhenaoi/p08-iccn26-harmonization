@@ -43,7 +43,7 @@ def main():
     ax = plt.gca()
     ax.set_xlabel(ax.get_xlabel(), fontsize=14)
     ax.tick_params(labelsize=12.5)
-    plt.title('What drives the age prediction? (SHAP, top 15 features)\nPSM (sex) + Site-only harmonized model',
+    plt.title('SHAP - subject-level method (top 15 features)\nPSM (sex) + Site-only harmonized model',
                fontsize=16, fontweight='bold')
     plt.tight_layout()
     out = FIG_DIR / "age_regression_shap_beeswarm.png"

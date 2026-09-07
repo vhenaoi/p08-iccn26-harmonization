@@ -48,7 +48,7 @@ def main():
     ax.set_yticklabels(order, fontsize=12.5)
     ax.set_xlabel('SAGE value (reduction in MSE)', fontsize=14)
     ax.axvline(0, color='#52514e', linewidth=0.8)
-    ax.set_title('What drives the age prediction? (SAGE, top 15 features)\nPSM (sex) + Site-only harmonized model',
+    ax.set_title('SAGE - model-level method (top 15 features)\nPSM (sex) + Site-only harmonized model',
                  fontsize=16, fontweight='bold')
     ax.grid(axis='x', alpha=0.3)
     plt.tight_layout()

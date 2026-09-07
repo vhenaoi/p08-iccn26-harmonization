@@ -26,11 +26,15 @@ def bar_chart(labels, means, sds, colors, title, out_name, note=None):
     ax.bar(x, means, yerr=sds, color=colors, capsize=6, width=0.55,
            edgecolor='white', linewidth=1.2, error_kw={'linewidth': 1.8, 'ecolor': '#333'})
     ax.axhline(CHANCE, color='gray', linestyle=':', linewidth=1.8)
-    ax.text(len(labels) - 0.4, CHANCE + 0.015, 'Chance level (1/3)', fontsize=11,
-            color='#555', ha='right')
+    # Dedicated margin to the right of the last bar for the "Chance level" label,
+    # so it never lands on top of a bar's value label -- some conditions (e.g.
+    # ComBat at 28%) sit right next to chance (33%), which used to overlap.
+    ax.set_xlim(-0.6, len(labels) - 1 + 2.1)
+    ax.text(len(labels) - 1 + 0.85, CHANCE + 0.02, 'Chance level (1/3)', fontsize=11,
+            color='#555', ha='left', va='bottom')
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=13.5)
-    ax.set_ylim(0, 0.9)
+    ax.set_ylim(0, 1.0)
     ax.set_ylabel('Balanced accuracy\n(guessing which site a recording came from)', fontsize=13)
     ax.set_title(title, fontsize=16, fontweight='bold')
     for i, m in enumerate(means):
@@ -58,17 +62,23 @@ if __name__ == '__main__':
         colors=['#898781', '#eb6834', '#e34948', '#1baf7a'],
         title='Can a model still guess which site a recording came from?',
         out_name='site_classification_mirror_simple.png',
-        note='20x repeated 10-fold cross-validation. 3 sites, so chance = 33%.'
+        note='LogisticRegressionCV, balanced accuracy, 20x repeated 10-fold CV. 3 sites, so chance = 33%.'
     )
 
     # -- Slide 12 (is it just demographics?): Raw vs. two age+sex-only fixes
-    # (neither reaches chance) vs. ComBat (which does)
+    # (neither reaches chance) vs. Site-only (which does). Swapped from ComBat
+    # to Site-only per Veronica's request (2026-09-06) -- both target site
+    # directly and make the same pedagogical point, but Site-only is the
+    # method actually carried forward into Step 5, so using it here instead
+    # of introducing ComBat only for this one slide keeps the deck's method
+    # choice consistent. Value (0.129 +/- 0.015) is the real, already-computed
+    # Site-only result from the slide-11 chart above (same model/data/seeds).
     bar_chart(
-        labels=['Raw\n(no correction)', 'Residualization\n(age+sex only)', 'Matching\n(age+sex only)', 'ComBat\n(targets site)'],
-        means=[0.777, 0.741, 0.658, 0.280],
-        sds=[0.015, 0.008, 0.028, 0.020],
-        colors=['#898781', '#f2a97e', '#2a78d6', '#eb6834'],
+        labels=['Raw\n(no correction)', 'Residualization\n(age+sex only)', 'Matching\n(age+sex only)', 'Site-only\n(targets site)'],
+        means=[0.777, 0.741, 0.658, 0.129],
+        sds=[0.015, 0.008, 0.028, 0.015],
+        colors=['#898781', '#f2a97e', '#2a78d6', '#1baf7a'],
         title='Is it just demographics? Removing only age+sex is not enough',
         out_name='site_classification_exact_replica_simple.png',
-        note='Only correcting age and sex barely moves the needle -- you have to target site itself.'
+        note='LogisticRegressionCV, balanced accuracy, 20x repeated 10-fold CV. Only correcting age and sex barely moves the needle -- you have to target site itself.'
     )

@@ -27,15 +27,31 @@ changed between RCs.
 
 ## What's new in v2
 
-With N=111/site instead of N=30/site, three findings changed in ways worth
-knowing before reusing this code:
+With N=111/site instead of N=30/site, several findings changed in ways
+worth knowing before reusing this code:
 
 - **Site-only harmonization alone no longer clearly beats raw data** for
   age prediction (R² 0.380 vs. 0.378, not significant) — a genuinely more
   honest result than v1's N=30 finding, where it looked like a clear win.
-  Fixing this required also matching on sex (`psm_siteonly_v2.py`) before
-  harmonizing, which recovers a real, significant improvement (R² = 0.406,
-  p<0.0001).
+- **Update (2026-09-06) — verify, don't assume, applied to our own earlier
+  claim:** the R²=0.406 result below was originally compared against the
+  N=333 baselines above, mixing two different sample sizes in one
+  comparison. Re-run with every condition on the **exact same** N=226
+  sex-matched sample (`age_regression_matched_v2.py`), the honest result is
+  more nuanced: **unharmonized data on the matched sample (R²=0.419) is
+  actually the single best-performing condition** — slightly ahead of
+  site-only harmonization on that same sample (R²=0.406). Site-only remains
+  the best choice *among methods that actually change the EEG features* (it
+  clearly beats ComBat and full residualization), but matching — not
+  harmonization — produced most of the improvement over the raw N=333
+  baseline. A further check (`matching_contribution_v2.py`) confirms
+  matching is not interchangeable with statistically adjusting for sex by
+  regression instead: site+sex regression-adjustment on all 333 subjects
+  scores R²=0.352, actually *worse* than doing nothing, while physically
+  matching first and then harmonizing reaches 0.406 (p<0.0001 vs. both
+  alternatives). We are leaving the original R²=0.406-vs-0.380/0.378
+  comparison in the bullet below for the historical record, but the
+  same-sample comparison above is the one to trust.
 - **Matching helps, but not uniformly across techniques.** Pairing the same
   sex-matched subset with ComBat instead of site-only residualization
   (`psm_combatnoage_v2.py`) does **not** produce a comparable gain: R² =
@@ -116,12 +132,18 @@ Reliability with a Pre-Processing Pipeline based on ICA and Wavelet-ICA.
    harmonization, per feature.
 6. **`psm_siteonly_v2.py`** — matches sex 50/50 within each site (the
    confound found significant in Step 1), then applies site-only
-   harmonization on the matched subset — the condition that actually wins
-   Step 6 below.
+   harmonization on the matched subset — the best choice among methods
+   that actually harmonize the data in Step 8 below (see the 2026-09-06
+   update above: on a same-sample comparison, the unharmonized matched data
+   edges it out slightly).
 6b. **`psm_combatnoage_v2.py`** — pairs that same matched subset with
    ComBat (no age) instead of site-only harmonization, to test whether
    matching-first is a technique-agnostic fix. It isn't (see "What's new
    in v2" above).
+6c. **`psm_residualization_v2.py`** — adds the matched-sample (N=226)
+   counterparts of full residualization (age+sex+site) and residualization
+   (no age), so every harmonization method can be compared on the exact
+   same sample (used by `age_regression_matched_v2.py` below).
 7. **`site_classification_v2.py`** / **`site_classification_exact_replica_v2.py`**
    / **`site_classification_slides_simple_v2.py`** — the direct
    verification: can a classifier still guess the recording site after
@@ -130,11 +152,20 @@ Reliability with a Pre-Processing Pipeline based on ICA and Wavelet-ICA.
 8. **`age_regression_v2.py`** — the AI: predicts age from EEG features,
    comparing raw / residualization (with and without age) / ComBat (no
    age) / matched+ComBat (no age) / site-only / matched+site-only
-   harmonization (7 conditions), with 20× repeated 10-fold
-   cross-validation.
+   harmonization (7 conditions, mixing N=333 and N=226 samples), with
+   20× repeated 10-fold cross-validation.
+8b. **`age_regression_matched_v2.py`** — the corrected, same-sample
+   comparison: all 5 harmonization conditions computed on the exact same
+   N=226 matched sample (see the 2026-09-06 update above for why the
+   original comparison in `age_regression_v2.py` needed this follow-up).
+8c. **`matching_contribution_v2.py`** — isolates how much of the
+   improvement comes from matching itself vs. from harmonization, by
+   holding the harmonization method (site-only) fixed and comparing: no
+   matching (N=333), matching by statistical regression-adjustment instead
+   of physically matching (N=333), and physical matching first (N=226).
 9. **`age_regression_shap_v2.py`** / **`age_regression_sage_v2.py`** —
-   explainability on the winning matched + site-only harmonized model
-   (SHAP: supplementary-material method; SAGE: main-manuscript method).
+   explainability on the matched + site-only harmonized model (SHAP:
+   supplementary-material method; SAGE: main-manuscript method).
 10. **`donoghue_comparison_v2.py`** — external validation against
     Donoghue et al. (2020)'s published age-band comparison.
 11. **`normative_age_model_v2.py`** — the normative-modeling method from
